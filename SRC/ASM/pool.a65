@@ -1,0 +1,637 @@
+buffer = $1000
+
+outptr = 85
+cx = 87
+cy = 88
+outtab = 89
+ballxy_0 = 0
+ballxy_1 = 7
+ballxy_2 = 14
+ballxy_3 = 21
+bveloc_0 = 28
+bveloc_1 = 35
+bveloc_2 = 42
+bveloc_3 = 49
+horz = 91
+vert = 93
+flag1 = 95
+flag2 = 96
+reball = 56
+acc1 = 97
+acc2 = 99
+result = 101
+temp1 = 103
+temp2 = 104
+temp3 = 105
+valx = 106
+valy = 108
+vala = 110
+valb = 112
+cos = 114
+sin = 116
+temp4 = 118
+temp5 = 119
+tuched = 150
+grid = 200
+
+        org $200        
+        lda #255
+        sta 59459
+        lda #0
+        sta grid
+
+        ldy #6
+loop0   lda  start_0,y
+        sta ballxy_0,y
+        lda  start_1,y
+        sta ballxy_1,y
+        lda #0
+        sta ballxy_2,y
+        sta ballxy_3,y
+        sta bveloc_0,y
+        sta bveloc_1,y
+        sta bveloc_2,y
+        sta bveloc_3,y
+        lda #255
+        sta tuched,y
+        dey
+        bpl loop0
+
+        lda #10
+        sta bveloc_1+6
+
+        sei
+        lda #60
+        sta 59411
+        lda #lo(60000)
+        sta 59462
+        lda #hi(60000)
+        sta 59463
+        lda #64
+        sta 59467
+        lda #192
+        sta 59470
+        lda #lo(60000)
+        sta 59460
+        lda #hi(60000)
+        sta 59461
+        lda #lo(irq)
+        sta 144
+        lda #hi(irq)
+        sta 145
+
+        ldx #6
+loop2   lda #0
+        sta reball,x
+        jsr ball
+        dex
+        bpl loop2
+        cli
+
+refrsh  lda #lo(buffer)
+        sta outptr
+        lda #hi(buffer)
+        sta outptr+1
+
+        jsr draw
+        inc outptr+1
+        jsr draw
+        inc outptr+1
+        jsr draw
+        inc outptr+1
+        jsr draw
+        inc outptr+1
+        jsr draw
+        inc outptr+1
+        jsr draw
+        inc outptr+1
+        jsr draw
+        inc outptr+1
+        jmp refrsh
+
+draw    ldy #65
+draw_1  lda (outptr),y
+        tax
+        dey
+        lda (outptr),y
+        sta 59426
+        stx 59471
+        dey
+        bpl draw_1
+        rts
+
+ball    lda reball,x
+        beq recalc
+        dec reball,x
+        rts
+
+recalc  lda #1
+        sta reball,x
+        lda ballxy_0,x
+        sta cx
+        lda ballxy_1,x
+        sta cy
+        clc
+        lda #lo(buffer)
+        sta outtab
+        txa
+        adc #hi(buffer)
+        sta outtab+1
+
+        ldy #65
+loop1   clc
+        lda cy
+        adc cossin,y
+        sta (outtab),y
+        dey
+        clc
+        lda cx
+        adc cossin,y
+        sta (outtab),y
+        dey
+        bpl loop1
+        rts
+
+start_0 db 128,128,128,128,128,128,132
+start_1 db 120,250,230,200,180,150,85
+
+irq     lda 59460
+
+        ldy grid
+        lda ballxy_0,y
+        tax
+        lda ballxy_1,y
+        stx 59426
+        sta 59471
+        iny
+        cpy #7
+        bcc irq_1
+        ldy #0
+irq_1   sty grid
+
+        ldx #6
+loop3   lda #0
+        sta flag2
+        lda bveloc_0,x
+        ora bveloc_1,x
+        ora bveloc_2,x
+        ora bveloc_3,x
+        bne shift
+        dex
+        bpl loop3
+        bmi endirq
+
+shift   clc
+        lda ballxy_2,x
+        adc bveloc_2,x
+        sta ballxy_2,x
+        lda ballxy_0,x
+        adc bveloc_0,x
+        cmp ballxy_0,x
+        beq sethi1
+        inc flag2
+        sta ballxy_0,x
+sethi1  clc
+        lda ballxy_3,x
+        adc bveloc_3,x
+        sta ballxy_3,x
+        lda ballxy_1,x
+        adc bveloc_1,x
+        cmp ballxy_1,x
+        beq sethi2
+        inc flag2
+        sta ballxy_1,x
+
+sethi2  lda flag2
+        bne moved
+next3   dex
+        bpl loop3
+
+endirq  pla
+        tay
+        pla
+        tax
+        pla
+        rti
+
+moved   jsr ball
+        ldy #6
+loop4   sty temp3
+        cpx temp3
+        beq apart
+
+        sec
+        lda ballxy_0,y
+        sbc ballxy_0,x
+        bcs foo1
+        lda ballxy_0,x
+        sbc ballxy_0,y
+foo1    cmp #11
+        bcs going
+
+        asl a
+        asl a
+        asl a
+        asl a
+        sta temp4
+        
+        sec
+        lda ballxy_1,y
+        sbc ballxy_1,x
+        bcs foo2
+        lda ballxy_1,x
+        sbc ballxy_1,y
+foo2    cmp #11
+        bcs going
+
+        adc temp4
+        tay
+        lda hits, y
+        ldy temp3
+        ror a
+        bcc touch        
+
+going   lda tuched,x
+        sta temp3
+        cpy temp3
+        bne apart
+        lda #255
+        sta tuched,x
+apart   dey
+        bpl loop4
+        jmp next3
+
+mult    lda #0
+        sta result
+        sta result+1
+        sta temp4
+        sta temp5
+        sty temp3
+        ldy #16
+a833    ror acc1+1
+        ror acc1
+        bcc a848
+        clc
+        lda temp5
+        adc acc2
+        sta temp5
+        lda result
+        adc acc2+1
+        sta result
+        lda result+1
+        adc temp4
+        sta result+1
+a848    asl acc2
+        rol acc2+1
+        rol temp4
+        dey
+        bne a833
+        ldy temp3
+        rts
+
+touch   lda tuched,x
+        sta temp4
+        cpy temp4
+        beq apart
+        tya
+        sta tuched,x
+        lda tuched,y
+        sta temp4
+        cpx temp4
+        beq apart
+        txa
+        sta tuched,y
+
+        sec
+        lda ballxy_2,y
+        sbc ballxy_2,x
+        sta acc1
+        lda ballxy_0,y
+        sbc ballxy_0,x
+        sta acc1+1
+        lda #23
+        sta acc2
+        lda #0
+        sta acc2+1
+        jsr multc
+        lda result
+        sta cos
+        lda result+1
+        sta cos+1           ; cos = (x1-x0)/11
+
+        sec
+        lda ballxy_3,y
+        sbc ballxy_3,x
+        sta acc1
+        lda ballxy_1,y
+        sbc ballxy_1,x
+        sta acc1+1          ; acc1 = y1-y0
+        lda #23
+        sta acc2
+        lda #0
+        sta acc2+1
+        jsr multc
+        lda result
+        sta sin
+        lda result+1
+        sta sin+1           ; sin = (y1-y0)/11
+
+        lda bveloc_3,x
+        sta acc1
+        lda bveloc_1,x
+        sta acc1+1          ; dy0
+        lda cos
+        sta acc2
+        lda cos+1
+        sta acc2+1
+        jsr multc           ; dy0 * cos
+        lda result
+        sta temp1
+        lda result+1
+        sta temp2
+        lda bveloc_2,x
+        sta acc1
+        lda bveloc_0,x
+        sta acc1+1          ; dx0
+        lda sin
+        sta acc2
+        lda sin+1
+        sta acc2+1
+        jsr multc           ; dx0 * sin
+        sec
+        lda temp1
+        sbc result
+        sta valx
+        lda temp2
+        sbc result+1
+        sta valx+1          ; valx = dy0*cos - dx0*sin
+
+        lda bveloc_3,y
+        sta acc1
+        lda bveloc_1,y
+        sta acc1+1          ; dy1
+        lda cos
+        sta acc2
+        lda cos+1
+        sta acc2+1
+        jsr multc           ; dy1 * cos
+        lda result
+        sta temp1
+        lda result+1
+        sta temp2
+        lda bveloc_2,y
+        sta acc1
+        lda bveloc_0,y
+        sta acc1+1          ; dx1
+        lda sin
+        sta acc2
+        lda sin+1
+        sta acc2+1
+        jsr multc           ; dx1 * sin
+        sec
+        lda temp1
+        sbc result
+        sta valy
+        lda temp2
+        sbc result+1
+        sta valy+1          ; valy = dy1*cos - dx1*sin
+
+        lda bveloc_3,y
+        sta acc1
+        lda bveloc_1,y
+        sta acc1+1          ; dy1
+        lda sin
+        sta acc2
+        lda sin+1
+        sta acc2+1
+        jsr multc           ; dy1 * sin
+        lda result
+        sta temp1
+        lda result+1
+        sta temp2
+        lda bveloc_2,y
+        sta acc1
+        lda bveloc_0,y
+        sta acc1+1          ; dx1
+        lda cos
+        sta acc2
+        lda cos+1
+        sta acc2+1
+        jsr multc           ; dx1 * cos
+        clc
+        lda temp1
+        adc result
+        sta vala
+        lda temp2
+        adc result+1
+        sta vala+1          ; vala = dy1*sin + dx1*cos
+
+        lda bveloc_3,x
+        sta acc1
+        lda bveloc_1,x
+        sta acc1+1          ; dy0
+        lda sin
+        sta acc2
+        lda sin+1
+        sta acc2+1
+        jsr multc           ; dy0 * sin
+        lda result
+        sta temp1
+        lda result+1
+        sta temp2
+        lda bveloc_2,x
+        sta acc1
+        lda bveloc_0,x      ; dx0
+        sta acc1+1
+        lda cos
+        sta acc2
+        lda cos+1
+        sta acc2+1
+        jsr multc           ; dx0 * cos
+        clc
+        lda temp1
+        adc result
+        sta valb
+        lda temp2
+        adc result+1
+        sta valb+1          ; valb = dy0*sin + dx0*cos
+
+        lda valx
+        sta acc1
+        lda valx+1
+        sta acc1+1
+        lda cos
+        sta acc2
+        lda cos+1
+        sta acc2+1
+        jsr multc           ; valx * cos
+        lda result
+        sta temp1
+        lda result+1
+        sta temp2
+        lda vala
+        sta acc1
+        lda vala+1
+        sta acc1+1
+        lda sin
+        sta acc2
+        lda sin+1
+        sta acc2+1
+        jsr multc           ; vala * sin
+        clc
+        lda result
+        adc temp1
+        sta bveloc_3,x
+        lda result+1
+        adc temp2
+        sta bveloc_1,x      ; dy0 = valx*cos + vala*sin
+
+        lda vala
+        sta acc1
+        lda vala+1
+        sta acc1+1
+        lda cos
+        sta acc2
+        lda cos+1
+        sta acc2+1
+        jsr multc           ; vala * cos
+        lda result
+        sta temp1
+        lda result+1
+        sta temp2
+        lda valx
+        sta acc1
+        lda valx+1
+        sta acc1+1
+        lda sin
+        sta acc2
+        lda sin+1
+        sta acc2+1
+        jsr multc           ; valx * sin
+        sec
+        lda temp1
+        sbc result
+        sta bveloc_2,x
+        lda temp2
+        sbc result+1
+        sta bveloc_0,x      ; dx0 = vala*cos - valx*sin
+
+        lda valy
+        sta acc1
+        lda valy+1
+        sta acc1+1
+        lda cos
+        sta acc2
+        lda cos+1
+        sta acc2+1
+        jsr multc           ; valy * cos
+        lda result
+        sta temp1
+        lda result+1
+        sta temp2
+        lda valb
+        sta acc1
+        lda valb+1
+        sta acc1+1
+        lda sin
+        sta acc2
+        lda sin+1
+        sta acc2+1
+        jsr multc           ; valb * sin
+        clc
+        lda result
+        adc temp1
+        sta bveloc_3,y
+        lda result+1
+        adc temp2
+        sta bveloc_1,y      ; dy1 = valy*cos + valb*sin
+
+        lda valb
+        sta acc1
+        lda valb+1
+        sta acc1+1
+        lda cos
+        sta acc2
+        lda cos+1
+        sta acc2+1
+        jsr multc           ; valb * cos
+        lda result
+        sta temp1
+        lda result+1
+        sta temp2
+        lda valy
+        sta acc1
+        lda valy+1
+        sta acc1+1
+        lda sin
+        sta acc2
+        lda sin+1
+        sta acc2+1
+        jsr multc           ; valy * sin
+        sec
+        lda temp1
+        sbc result
+        sta bveloc_2,y
+        lda temp2
+        sbc result+1
+        sta bveloc_0,y      ; dx1 = valb*cos - valy*sin
+        jmp apart
+
+hits    db 0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0
+        db 0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1
+        db 0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0
+        db 1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1,1,0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,1
+        db 0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+        db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+
+cossin  db 5,0,5,1,5,2
+        db 4,2,4,3,3,4
+        db 2,4,2,5,1,5
+        db 0,5,255,5,254,5
+        db 254,4,253,4,252,3
+        db 251,2,251,1,251,0
+        db 251,255,251,254,252,254
+        db 252,253,253,252,254,252
+        db 254,251,255,251,0,251
+        db 1,251,2,251,3,252
+        db 4,253,5,254,5,255
+
+decomp  lda acc1+1
+        sta flag1
+        bpl tryac2
+        sec
+        lda #0
+        sbc acc1
+        sta acc1
+        lda #0
+        sbc acc1+1
+        sta acc1+1
+tryac2  lda acc2+1
+        bpl tried
+        eor flag1
+        sta flag1
+        sec
+        lda #0
+        sbc acc2
+        sta acc2
+        lda #0
+        sbc acc2+1
+        sta acc2+1
+tried   rts
+
+comp    bit flag1
+        bpl endneg
+        sec
+        lda #0
+        sbc result
+        sta result
+        lda #0
+        sbc result+1
+        sta result+1
+endneg  rts
+
+multc   jsr decomp
+        jsr mult
+        jmp comp
+.end

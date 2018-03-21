@@ -1,0 +1,35 @@
+entry = $200
+
+irq_vec = 144
+
+        org $ffc0
+        
+reset   cld
+        ldx #$ff
+        txs
+        lda #lo(isr)
+        sta irq_vec
+        lda #hi(isr)
+        sta irq_vec+1
+        jmp entry
+        
+irq     pha
+        txa
+        pha
+        tya
+        pha
+        jmp (irq_vec)
+
+isr     pla
+        tay
+        pla
+        tax
+        pla
+        rti
+
+nmi     rti
+
+        org $fffa
+        dw nmi
+        dw reset
+        dw irq
